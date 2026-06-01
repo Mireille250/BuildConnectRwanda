@@ -1,0 +1,100 @@
+import { UsersService } from './users.service';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import type { RequestUser } from '../../common/decorators/current-user.decorator';
+export declare class UsersController {
+    private readonly usersService;
+    constructor(usersService: UsersService);
+    getMyProfile(user: RequestUser): Promise<{
+        id: string;
+        email: string;
+        firstName: string;
+        lastName: string;
+        role: string;
+        profilePhoto: string | null;
+        bio: string | null;
+        phone: string | null;
+        district: string | null;
+        isVerified: boolean;
+        createdAt: Date;
+        profile: {
+            profession: string | null;
+            skills: string[];
+            experience: number | null;
+            availability: boolean;
+            portfolioUrl: string | null;
+            linkedinUrl: string | null;
+            rating: number | null;
+            ratingCount: number;
+            licenseNumber: string | null;
+            institution: string | null;
+            graduationYear: number | null;
+            companyName: string | null;
+            registrationNo: string | null;
+            website: string | null;
+        } | null;
+    }>;
+    getPublicProfile(id: string): Promise<{
+        reviews: Record<string, never>[];
+        projects: Record<string, never>[];
+        id: string;
+        email: string;
+        firstName: string;
+        lastName: string;
+        role: string;
+        profilePhoto: string | null;
+        bio: string | null;
+        phone: string | null;
+        district: string | null;
+        isVerified: boolean;
+        createdAt: Date;
+        profile: {
+            profession: string | null;
+            skills: string[];
+            experience: number | null;
+            availability: boolean;
+            portfolioUrl: string | null;
+            linkedinUrl: string | null;
+            rating: number | null;
+            ratingCount: number;
+            licenseNumber: string | null;
+            institution: string | null;
+            graduationYear: number | null;
+            companyName: string | null;
+            registrationNo: string | null;
+            website: string | null;
+        } | null;
+    }>;
+    updateProfile(user: RequestUser, dto: UpdateProfileDto): Promise<{
+        id: string;
+        email: string;
+        firstName: string;
+        lastName: string;
+        role: string;
+        profilePhoto: string | null;
+        bio: string | null;
+        phone: string | null;
+        district: string | null;
+        isVerified: boolean;
+        createdAt: Date;
+        profile: {
+            profession: string | null;
+            skills: string[];
+            experience: number | null;
+            availability: boolean;
+            portfolioUrl: string | null;
+            linkedinUrl: string | null;
+            rating: number | null;
+            ratingCount: number;
+            licenseNumber: string | null;
+            institution: string | null;
+            graduationYear: number | null;
+            companyName: string | null;
+            registrationNo: string | null;
+            website: string | null;
+        } | null;
+    }>;
+    changePassword(user: RequestUser, dto: ChangePasswordDto): Promise<{
+        message: string;
+    }>;
+}

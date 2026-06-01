@@ -1,0 +1,101 @@
+import { DatabaseService } from '../../database/database.service';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+export declare class UsersService {
+    private readonly db;
+    private readonly logger;
+    constructor(db: DatabaseService);
+    getMyProfile(userId: string): Promise<{
+        id: string;
+        email: string;
+        firstName: string;
+        lastName: string;
+        role: string;
+        profilePhoto: string | null;
+        bio: string | null;
+        phone: string | null;
+        district: string | null;
+        isVerified: boolean;
+        createdAt: Date;
+        profile: {
+            profession: string | null;
+            skills: string[];
+            experience: number | null;
+            availability: boolean;
+            portfolioUrl: string | null;
+            linkedinUrl: string | null;
+            rating: number | null;
+            ratingCount: number;
+            licenseNumber: string | null;
+            institution: string | null;
+            graduationYear: number | null;
+            companyName: string | null;
+            registrationNo: string | null;
+            website: string | null;
+        } | null;
+    }>;
+    getPublicProfile(targetId: string): Promise<{
+        reviews: Record<string, never>[];
+        projects: Record<string, never>[];
+        id: string;
+        email: string;
+        firstName: string;
+        lastName: string;
+        role: string;
+        profilePhoto: string | null;
+        bio: string | null;
+        phone: string | null;
+        district: string | null;
+        isVerified: boolean;
+        createdAt: Date;
+        profile: {
+            profession: string | null;
+            skills: string[];
+            experience: number | null;
+            availability: boolean;
+            portfolioUrl: string | null;
+            linkedinUrl: string | null;
+            rating: number | null;
+            ratingCount: number;
+            licenseNumber: string | null;
+            institution: string | null;
+            graduationYear: number | null;
+            companyName: string | null;
+            registrationNo: string | null;
+            website: string | null;
+        } | null;
+    }>;
+    updateProfile(userId: string, dto: UpdateProfileDto): Promise<{
+        id: string;
+        email: string;
+        firstName: string;
+        lastName: string;
+        role: string;
+        profilePhoto: string | null;
+        bio: string | null;
+        phone: string | null;
+        district: string | null;
+        isVerified: boolean;
+        createdAt: Date;
+        profile: {
+            profession: string | null;
+            skills: string[];
+            experience: number | null;
+            availability: boolean;
+            portfolioUrl: string | null;
+            linkedinUrl: string | null;
+            rating: number | null;
+            ratingCount: number;
+            licenseNumber: string | null;
+            institution: string | null;
+            graduationYear: number | null;
+            companyName: string | null;
+            registrationNo: string | null;
+            website: string | null;
+        } | null;
+    }>;
+    changePassword(userId: string, dto: ChangePasswordDto): Promise<{
+        message: string;
+    }>;
+    private formatProfile;
+}
