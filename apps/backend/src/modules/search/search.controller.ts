@@ -4,7 +4,6 @@ import { SearchProfessionalsDto } from './dto/search-professionals.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 @Controller('search')
-@UseGuards(JwtAuthGuard)
 export class SearchController {
   constructor(private readonly searchService: SearchService) {}
 

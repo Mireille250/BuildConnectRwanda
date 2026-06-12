@@ -50,17 +50,29 @@ export default function JobDetailPage() {
     fetchJob();
   }, [jobId]);
 
-  async function fetchJob() {
-    try {
-      const { data } = await api.get(`/jobs/${jobId}`);
-      setJob(data);
-    } catch {
-      toast.error('Job not found');
-      router.push('/jobs');
-    } finally {
-      setLoading(false);
-    }
-  }
+async function fetchJobs(p = 1) {
+  setLoading(true);
+  try {
+    const params = new URLSearchParams();
+    params.set('page', String(p));
+    params.set('limit', '10');
+    if (filters.status) params.set('status', filters.status);
+    if (filters.district && filters.district !== 'All Districts') params.set('district', filters.district);
+    if (filters.profession && filters.profession !== 'All Jobs') params.set('profession', filters.profession);
+    if (filters.keyword) params.set('keyword', filters.keyword);
+    if (filters.minBudget) params.set('minBudget', String(filters.minBudget));
+    if (filters.maxBudget) params.set('maxBudget', String(filters.maxBudget));
+
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/jobs?${params.toString()}`
+    );
+    const data = await response.json();
+    setJobs(data.data);
+    setTotal(data.meta.total);
+    setPage(p);
+  } catch { console.error('Failed to fetch jobs'); }
+  finally { setLoading(false); }
+}
 
   async function handleApply() {
     setApplying(true);

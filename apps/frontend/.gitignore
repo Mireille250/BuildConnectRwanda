@@ -41,6 +41,6 @@ yarn-error.log*
 next-env.d.ts
 node_modules
 .env.local
-dist
+dist/
 build
-.next
+.next/

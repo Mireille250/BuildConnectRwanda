@@ -58,7 +58,7 @@ let JobsController = class JobsController {
 exports.JobsController = JobsController;
 __decorate([
     (0, common_1.Post)(),
-    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, roles_decorator_1.Roles)('CLIENT', 'COMPANY'),
     (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),
@@ -76,6 +76,7 @@ __decorate([
 ], JobsController.prototype, "searchJobs", null);
 __decorate([
     (0, common_1.Get)('saved'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -83,6 +84,7 @@ __decorate([
 ], JobsController.prototype, "getSavedJobs", null);
 __decorate([
     (0, common_1.Get)('my'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -97,6 +99,7 @@ __decorate([
 ], JobsController.prototype, "getJobById", null);
 __decorate([
     (0, common_1.Patch)(':id'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),
     __param(1, (0, common_1.Param)('id', common_1.ParseUUIDPipe)),
     __param(2, (0, common_1.Body)()),
@@ -106,6 +109,7 @@ __decorate([
 ], JobsController.prototype, "updateJob", null);
 __decorate([
     (0, common_1.Delete)(':id'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),
     __param(1, (0, common_1.Param)('id', common_1.ParseUUIDPipe)),
@@ -115,6 +119,7 @@ __decorate([
 ], JobsController.prototype, "deleteJob", null);
 __decorate([
     (0, common_1.Post)(':id/save'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),
     __param(1, (0, common_1.Param)('id', common_1.ParseUUIDPipe)),
@@ -124,6 +129,7 @@ __decorate([
 ], JobsController.prototype, "saveJob", null);
 __decorate([
     (0, common_1.Delete)(':id/save'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),
     __param(1, (0, common_1.Param)('id', common_1.ParseUUIDPipe)),
@@ -133,7 +139,6 @@ __decorate([
 ], JobsController.prototype, "unsaveJob", null);
 exports.JobsController = JobsController = __decorate([
     (0, common_1.Controller)('jobs'),
-    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     __metadata("design:paramtypes", [jobs_service_1.JobsService])
 ], JobsController);
 //# sourceMappingURL=jobs.controller.js.map

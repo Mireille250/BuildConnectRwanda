@@ -16,7 +16,6 @@ exports.SearchController = void 0;
 const common_1 = require("@nestjs/common");
 const search_service_1 = require("./search.service");
 const search_professionals_dto_1 = require("./dto/search-professionals.dto");
-const jwt_auth_guard_1 = require("../../common/guards/jwt-auth.guard");
 let SearchController = class SearchController {
     searchService;
     constructor(searchService) {
@@ -36,7 +35,6 @@ __decorate([
 ], SearchController.prototype, "searchProfessionals", null);
 exports.SearchController = SearchController = __decorate([
     (0, common_1.Controller)('search'),
-    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     __metadata("design:paramtypes", [search_service_1.SearchService])
 ], SearchController);
 //# sourceMappingURL=search.controller.js.map
