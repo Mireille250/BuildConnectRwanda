@@ -9,23 +9,27 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
   constructor(private readonly config: ConfigService) {}
 
-  async onModuleInit(): Promise<void> {
-    this.pool = new Pool({
-      connectionString: this.config.get<string>('DATABASE_URL'),
-      max: 10,
-      idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 5_000,
-    });
+ async onModuleInit(): Promise<void> {
+  const databaseUrl = this.config.get<string>('DATABASE_URL') ?? '';
+  const isProduction = databaseUrl.includes('neon.tech') || this.config.get<string>('NODE_ENV') === 'production';
 
-    try {
-      const client = await this.pool.connect();
-      client.release();
-      this.logger.log('PostgreSQL connected successfully');
-    } catch (error) {
-      this.logger.error('Failed to connect to PostgreSQL', error);
-      throw error;
-    }
+  this.pool = new Pool({
+    connectionString: databaseUrl,
+    max: 10,
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 5_000,
+    ssl: isProduction ? { rejectUnauthorized: false } : false,
+  });
+
+  try {
+    const client = await this.pool.connect();
+    client.release();
+    this.logger.log('PostgreSQL connected successfully');
+  } catch (error) {
+    this.logger.error('Failed to connect to PostgreSQL', error);
+    throw error;
   }
+}
 
   async onModuleDestroy(): Promise<void> {
     await this.pool.end();
