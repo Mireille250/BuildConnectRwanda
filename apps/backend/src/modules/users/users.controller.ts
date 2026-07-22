@@ -1,12 +1,18 @@
 import {
   Controller,
   Get,
+  Post,
   Patch,
   Body,
   Param,
-  UseGuards,
   ParseUUIDPipe,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { UsersService } from './users.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -60,4 +66,13 @@ export class UsersController {
   ) {
     return this.usersService.changePassword(user.id, dto);
   }
+ @Post('me/photo')
+ @UseGuards(JwtAuthGuard)
+ @UseInterceptors(FileInterceptor('file'))
+ async uploadPhoto(
+  @CurrentUser() user: RequestUser,
+  @UploadedFile() file: Express.Multer.File,
+) {
+  return this.usersService.uploadProfilePhoto(user.id, file);
+}
 }

@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { Button } from '@/components/ui/button';
-
+import { SkeletonDashboardStat } from '@/components/shared/Skeletons';
+import { NotificationBell } from '@/components/shared/NotificationBell';
 interface DashboardStats {
   myApplications?: number;
   myJobs?: number;
@@ -22,51 +23,61 @@ interface RecentItem {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, logout } = useAuthStore();
+  const { user, logout, updateUser } = useAuthStore();
   const [stats, setStats] = useState<DashboardStats>({});
   const [recentJobs, setRecentJobs] = useState<RecentItem[]>([]);
   const [recentApps, setRecentApps] = useState<RecentItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { fetchData(); }, []);
+async function fetchData() {
+  try {
+    const [appsRes, jobsRes, convsRes, allJobsRes, profileRes] = await Promise.all([
+      api.get('/applications/my').catch(() => ({ data: [] })),
+      api.get('/jobs/my').catch(() => ({ data: [] })),
+      api.get('/messaging/conversations').catch(() => ({ data: [] })),
+      api.get('/jobs?limit=3&status=OPEN').catch(() => ({ data: { data: [] } })),
+      api.get('/users/me/profile').catch(() => ({ data: null })),
+    ]);
 
-  async function fetchData() {
-    try {
-      const [appsRes, jobsRes, convsRes, allJobsRes] = await Promise.all([
-        api.get('/applications/my').catch(() => ({ data: [] })),
-        api.get('/jobs/my').catch(() => ({ data: [] })),
-        api.get('/messaging/conversations').catch(() => ({ data: [] })),
-        api.get('/jobs?limit=3&status=OPEN').catch(() => ({ data: { data: [] } })),
-      ]);
+    const apps = Array.isArray(appsRes.data) ? appsRes.data : [];
+    const jobs = Array.isArray(jobsRes.data) ? jobsRes.data : [];
+    const convs = Array.isArray(convsRes.data.value ?? convsRes.data) ? (convsRes.data.value ?? convsRes.data) : [];
+    const unread = convs.reduce((sum: number, c: any) => sum + (c.unreadCount ?? 0), 0);
+    const profile = profileRes.data;
+    
 
-      const apps = Array.isArray(appsRes.data) ? appsRes.data : [];
-      const jobs = Array.isArray(jobsRes.data) ? jobsRes.data : [];
-      const convs = Array.isArray(convsRes.data.value ?? convsRes.data) ? (convsRes.data.value ?? convsRes.data) : [];
-      const unread = convs.reduce((sum: number, c: any) => sum + (c.unreadCount ?? 0), 0);
-
-      setStats({ myApplications: apps.length, myJobs: jobs.length, unreadMessages: unread });
-
-      setRecentApps(apps.slice(0, 3).map((a: any) => ({
-        id: a.id,
-        title: a.job?.title ?? 'Job',
-        subtitle: a.job?.district ?? '',
-        time: new Date(a.createdAt).toLocaleDateString('en-RW', { day: 'numeric', month: 'short' }),
-        status: a.status,
-      })));
-
-      const openJobs = allJobsRes.data?.data ?? [];
-      setRecentJobs(openJobs.map((j: any) => ({
-        id: j.id,
-        title: j.title,
-        subtitle: `${j.district} · ${j.applicationCount ?? 0} applicants`,
-        time: new Date(j.createdAt).toLocaleDateString('en-RW', { day: 'numeric', month: 'short' }),
-      })));
-    } catch {
-      console.error('Failed to load dashboard');
-    } finally {
-      setLoading(false);
+    // Update auth store with latest profile data
+    if (profile) {
+      updateUser({
+        district: profile.district,
+        profilePhoto: profile.profilePhoto,
+        isVerified: profile.isVerified,
+      });
     }
+
+    setStats({ myApplications: apps.length, myJobs: jobs.length, unreadMessages: unread });
+    setRecentApps(apps.slice(0, 3).map((a: any) => ({
+  id: a.id,
+  title: a.job?.title ?? a.jobTitle ?? 'Untitled Job',
+  subtitle: `${a.job?.district ?? ''} · ${a.job?.postedBy ?? ''}`.trim().replace(/^·\s*/, ''),
+  time: new Date(a.createdAt).toLocaleDateString('en-RW', { day: 'numeric', month: 'short' }),
+  status: a.status,
+})));
+
+    const openJobs = allJobsRes.data?.data ?? [];
+    setRecentJobs(openJobs.map((j: any) => ({
+      id: j.id,
+      title: j.title,
+      subtitle: `${j.district} · ${j.applicationCount ?? 0} applicants`,
+      time: new Date(j.createdAt).toLocaleDateString('en-RW', { day: 'numeric', month: 'short' }),
+    })));
+  } catch (err) {
+  console.error('Failed to load dashboard', err);
+} finally {
+    setLoading(false);
   }
+}
 
   const isClient = user?.role === 'CLIENT' || user?.role === 'COMPANY';
   const canApply = ['ENGINEER', 'WORKER', 'SUPPLIER'].includes(user?.role ?? '');
@@ -103,19 +114,23 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center gap-3">
             <button onClick={() => router.push('/messages')} className="relative w-9 h-9 rounded-full bg-gray-50 hover:bg-gray-100 flex items-center justify-center transition-colors">
-              💬
-              {(stats.unreadMessages ?? 0) > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-amber-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">
-                  {stats.unreadMessages}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => router.push('/profile')}
-              className="w-9 h-9 rounded-full bg-blue-900 text-white flex items-center justify-center font-bold text-sm"
-            >
-              {user?.firstName?.[0]}{user?.lastName?.[0]}
-            </button>
+  💬
+  {(stats.unreadMessages ?? 0) > 0 && (
+    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-amber-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">
+      {stats.unreadMessages}
+    </span>
+  )}
+</button>
+<NotificationBell />
+           <button onClick={() => router.push('/profile')} className="w-9 h-9 rounded-full overflow-hidden border-2 border-blue-200 shrink-0">
+  {user?.profilePhoto ? (
+    <img src={user.profilePhoto} alt="Profile" className="w-full h-full object-cover" />
+  ) : (
+    <div className="w-full h-full bg-blue-900 flex items-center justify-center text-white font-bold text-sm">
+      {user?.firstName?.[0]}{user?.lastName?.[0]}
+    </div>
+  )}
+</button>
             <Button variant="outline" size="sm" className="rounded-lg" onClick={() => { logout(); router.push('/'); }}>
               Sign Out
             </Button>
@@ -135,14 +150,14 @@ export default function DashboardPage() {
               <h1 className="text-3xl font-extrabold text-white mb-2">
                 Welcome back, {user?.firstName}! 👋
               </h1>
-              <div className="flex items-center gap-3 text-blue-200 text-sm">
-                <span>📍 {user?.district ?? 'Rwanda'}</span>
-                <span>·</span>
-                <span className="px-2 py-0.5 bg-white/10 rounded-full text-xs font-medium">{user?.role}</span>
-                {user?.isVerified && (
-                  <span className="px-2 py-0.5 bg-green-500/20 text-green-300 rounded-full text-xs font-medium">✓ Verified</span>
-                )}
-              </div>
+             <div className="flex items-center gap-3 text-blue-200 text-sm flex-wrap">
+  {user?.district && <span>📍 {user.district}</span>}
+  {user?.district && <span>·</span>}
+  <span className="px-2 py-0.5 bg-white/10 rounded-full text-xs font-medium">{user?.role}</span>
+  {user?.isVerified && (
+    <span className="px-2 py-0.5 bg-green-500/20 text-green-300 rounded-full text-xs font-medium">✓ Verified</span>
+  )}
+</div>
             </div>
             <div className="flex gap-3">
               {isClient && (
@@ -247,30 +262,17 @@ export default function DashboardPage() {
                   <h2 className="font-bold text-gray-900">My Recent Applications</h2>
                   <button onClick={() => router.push('/applications')} className="text-sm text-blue-600 hover:underline font-medium">View all →</button>
                 </div>
-                {loading ? (
-                  <div className="space-y-3">
-                    {[1,2].map((i) => <div key={i} className="h-16 bg-gray-50 rounded-xl animate-pulse" />)}
-                  </div>
-                ) : recentApps.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-gray-400 text-sm mb-3">No applications yet</p>
-                    <Button className="bg-blue-900 hover:bg-blue-800 text-white text-sm rounded-xl" onClick={() => router.push('/jobs')}>Browse Jobs</Button>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {recentApps.map((app) => (
-                      <div key={app.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                        <div>
-                          <p className="font-medium text-gray-900 text-sm">{app.title}</p>
-                          <p className="text-xs text-gray-400">{app.subtitle} · {app.time}</p>
-                        </div>
-                        <span className={`text-xs px-2 py-1 rounded-full font-semibold ${statusColor(app.status)}`}>{app.status}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+     {loading ? (
+  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+    {Array.from({ length: 4 }).map((_, i) => (
+      <SkeletonDashboardStat key={i} />
+    ))}
+  </div>
+) : (
+  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+    {/* existing stats */}
+  </div>
+)}
 
             {/* Open Jobs / Recommended */}
             <div className="bg-white rounded-2xl border border-gray-100 p-6">
@@ -313,9 +315,8 @@ export default function DashboardPage() {
                 </Button>
               </div>
             )}
-          </div>
+          </div>)}
         </div>
       </div>
     </div>
-  );
-}
+  </div>)}

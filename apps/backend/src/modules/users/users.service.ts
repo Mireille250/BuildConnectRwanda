@@ -8,6 +8,7 @@ import * as bcrypt from 'bcrypt';
 import { DatabaseService } from '../../database/database.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { CloudinaryService } from '../../common/cloudinary/cloudinary.service';
 
 interface UserRow {
   id: string;
@@ -46,7 +47,10 @@ interface ProfileRow {
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
 
-  constructor(private readonly db: DatabaseService) {}
+ constructor(
+  private readonly db: DatabaseService,
+  private readonly cloudinaryService: CloudinaryService,
+) {}
 
   // ─── Get Own Full Profile ──────────────────────────────────────────────────
 
@@ -88,6 +92,7 @@ export class UsersService {
        FROM profiles WHERE user_id = $1`,
       [targetId],
     );
+    
 
     // Get recent reviews for this user
     const reviews = await this.db.queryMany(
@@ -187,7 +192,22 @@ export class UsersService {
     this.logger.log(`Profile updated for user: ${userId}`);
     return this.getMyProfile(userId);
   }
+async uploadProfilePhoto(userId: string, file: Express.Multer.File) {
+  if (!file) throw new BadRequestException('No file provided');
 
+  const result = await this.cloudinaryService.uploadFile(
+    file.buffer,
+    'buildconnect/profiles',
+    'image',
+  );
+
+  await this.db.query(
+    'UPDATE users SET profile_photo = $1, updated_at = NOW() WHERE id = $2',
+    [result.secure_url, userId],
+  );
+
+  return { profilePhoto: result.secure_url };
+}
   // ─── Change Password ───────────────────────────────────────────────────────
 
   async changePassword(userId: string, dto: ChangePasswordDto) {

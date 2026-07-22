@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { Button } from '@/components/ui/button';
-
+import { SkeletonPublicProfile } from '@/components/shared/Skeletons';
 interface PublicProfile {
   id: string;
   firstName: string;
@@ -92,12 +92,8 @@ export default function PublicProfilePage() {
   }
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <p className="text-gray-400">Loading profile...</p>
-      </div>
-    );
-  }
+  return <SkeletonPublicProfile />;
+}
 
   if (!profile) return null;
 

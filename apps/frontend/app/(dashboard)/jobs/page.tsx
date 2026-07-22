@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { Button } from '@/components/ui/button';
-
+import { SkeletonJobCard } from '@/components/shared/Skeletons';
 interface Job {
   id: string;
   title: string;
@@ -283,21 +283,11 @@ export default function JobsPage() {
           </div>
 
           {loading ? (
-            <div className="space-y-4">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="bg-white border border-gray-100 rounded-2xl p-6 animate-pulse">
-                  <div className="flex gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-gray-200 shrink-0" />
-                    <div className="flex-1">
-                      <div className="h-5 bg-gray-200 rounded w-64 mb-2" />
-                      <div className="h-3 bg-gray-100 rounded w-40 mb-4" />
-                      <div className="h-3 bg-gray-100 rounded w-full mb-2" />
-                      <div className="h-3 bg-gray-100 rounded w-3/4" />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+  <div className="space-y-4">
+    {Array.from({ length: 5 }).map((_, i) => (
+      <SkeletonJobCard key={i} />
+    ))}
+  </div>
           ) : jobs.length === 0 ? (
             <div className="text-center py-20 bg-white rounded-2xl border border-gray-100">
               <p className="text-5xl mb-4">💼</p>

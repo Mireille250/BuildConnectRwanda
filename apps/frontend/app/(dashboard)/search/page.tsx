@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import { SkeletonProfileCard } from '@/components/shared/Skeletons';
 
 interface Professional {
   id: string;
@@ -335,21 +336,11 @@ export default function SearchPage() {
           </div>
 
           {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="bg-white border border-gray-100 rounded-2xl p-6 animate-pulse">
-                  <div className="flex gap-4 mb-4">
-                    <div className="w-16 h-16 rounded-full bg-gray-200" />
-                    <div className="flex-1">
-                      <div className="h-4 bg-gray-200 rounded w-32 mb-2" />
-                      <div className="h-3 bg-gray-100 rounded w-24" />
-                    </div>
-                  </div>
-                  <div className="h-3 bg-gray-100 rounded w-full mb-2" />
-                  <div className="h-3 bg-gray-100 rounded w-2/3" />
-                </div>
-              ))}
-            </div>
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    {Array.from({ length: 6 }).map((_, i) => (
+      <SkeletonProfileCard key={i} />
+    ))}
+  </div>
           ) : professionals.length === 0 ? (
             <div className="text-center py-20 bg-white rounded-2xl border border-gray-100">
               <p className="text-5xl mb-4">🔍</p>

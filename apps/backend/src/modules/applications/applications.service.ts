@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 import { CreateApplicationDto } from './dto/create-application.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 interface ApplicationRow {
   id: string;
@@ -24,53 +25,55 @@ interface ApplicationRow {
 export class ApplicationsService {
   private readonly logger = new Logger(ApplicationsService.name);
 
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   // ─── Apply to a Job ────────────────────────────────────────────────────────
 
-  async applyToJob(
-    userId: string,
-    jobId: string,
-    dto: CreateApplicationDto,
-  ) {
-    // 1. Check job exists and is open
+  async applyToJob(userId: string, jobId: string, dto: CreateApplicationDto) {
     const job = await this.db.queryOne<{
       id: string;
       status: string;
       posted_by_id: string;
+      title: string;
     }>(
-      'SELECT id, status, posted_by_id FROM jobs WHERE id = $1',
+      'SELECT id, status, posted_by_id, title FROM jobs WHERE id = $1',
       [jobId],
     );
 
     if (!job) throw new NotFoundException('Job not found');
+    if (job.status !== 'OPEN') throw new BadRequestException('This job is no longer accepting applications');
+    if (job.posted_by_id === userId) throw new ForbiddenException('You cannot apply to your own job');
 
-    if (job.status !== 'OPEN') {
-      throw new BadRequestException('This job is no longer accepting applications');
-    }
-
-    // 2. Cannot apply to your own job
-    if (job.posted_by_id === userId) {
-      throw new ForbiddenException('You cannot apply to your own job');
-    }
-
-    // 3. Check for duplicate application
     const existing = await this.db.queryOne(
       'SELECT id FROM applications WHERE job_id = $1 AND applicant_id = $2',
       [jobId, userId],
     );
+    if (existing) throw new ConflictException('You have already applied to this job');
 
-    if (existing) {
-      throw new ConflictException('You have already applied to this job');
-    }
-
-    // 4. Create application
     const application = await this.db.queryOne<ApplicationRow>(
       `INSERT INTO applications (job_id, applicant_id, cover_letter, proposed_rate)
-       VALUES ($1, $2, $3, $4)
-       RETURNING *`,
+       VALUES ($1, $2, $3, $4) RETURNING *`,
       [jobId, userId, dto.coverLetter ?? null, dto.proposedRate ?? null],
     );
+
+    // Get applicant info for notification
+    const applicantInfo = await this.db.queryOne<{ first_name: string; last_name: string }>(
+      'SELECT first_name, last_name FROM users WHERE id = $1',
+      [userId],
+    );
+
+    if (applicantInfo) {
+      await this.notificationsService.createNotification(
+        job.posted_by_id,
+        'NEW_APPLICATION',
+        'New Application Received',
+        `${applicantInfo.first_name} ${applicantInfo.last_name} applied to your job: ${job.title}`,
+        '/applications',
+      );
+    }
 
     this.logger.log(`User ${userId} applied to job ${jobId}`);
     return this.formatApplication(application!);
@@ -118,27 +121,23 @@ export class ApplicationsService {
     }));
   }
 
-  // ─── Get Applicants for a Job (CLIENT view) ────────────────────────────────
+  // ─── Get Applicants for a Job ──────────────────────────────────────────────
 
   async getJobApplicants(userId: string, jobId: string) {
-    // Verify the requester owns this job
     const job = await this.db.queryOne<{ posted_by_id: string; title: string }>(
       'SELECT posted_by_id, title FROM jobs WHERE id = $1',
       [jobId],
     );
 
     if (!job) throw new NotFoundException('Job not found');
-
-    if (job.posted_by_id !== userId) {
-      throw new ForbiddenException('You can only view applicants for your own jobs');
-    }
+    if (job.posted_by_id !== userId) throw new ForbiddenException('You can only view applicants for your own jobs');
 
     const applicants = await this.db.queryMany(
       `SELECT
          a.id, a.status, a.cover_letter, a.proposed_rate, a.created_at,
          u.id           AS applicant_id,
-         u.first_name   AS first_name,
-         u.last_name    AS last_name,
+         u.first_name,
+         u.last_name,
          u.profile_photo,
          u.district,
          u.is_verified,
@@ -187,8 +186,9 @@ export class ApplicationsService {
     const application = await this.db.queryOne<ApplicationRow & {
       posted_by_id: string;
       job_status: string;
+      job_title: string;
     }>(
-      `SELECT a.*, j.posted_by_id, j.status AS job_status
+      `SELECT a.*, j.posted_by_id, j.status AS job_status, j.title AS job_title
        FROM applications a
        JOIN jobs j ON j.id = a.job_id
        WHERE a.id = $1`,
@@ -196,36 +196,33 @@ export class ApplicationsService {
     );
 
     if (!application) throw new NotFoundException('Application not found');
+    if (application.posted_by_id !== userId) throw new ForbiddenException('You can only manage applications for your own jobs');
+    if (application.job_status !== 'OPEN') throw new BadRequestException('This job is no longer open');
 
-    if (application.posted_by_id !== userId) {
-      throw new ForbiddenException('You can only manage applications for your own jobs');
-    }
-
-    if (application.job_status !== 'OPEN') {
-      throw new BadRequestException('This job is no longer open');
-    }
-
-    // Use transaction: accept application + update job status together
     await this.db.transaction(async (client) => {
       await client.query(
-        `UPDATE applications SET status = 'ACCEPTED', updated_at = NOW()
-         WHERE id = $1`,
+        `UPDATE applications SET status = 'ACCEPTED', updated_at = NOW() WHERE id = $1`,
         [applicationId],
       );
-
       await client.query(
-        `UPDATE jobs SET status = 'IN_PROGRESS', updated_at = NOW()
-         WHERE id = $1`,
+        `UPDATE jobs SET status = 'IN_PROGRESS', updated_at = NOW() WHERE id = $1`,
         [application.job_id],
       );
-
-      // Reject all other pending applications for this job
       await client.query(
         `UPDATE applications SET status = 'REJECTED', updated_at = NOW()
          WHERE job_id = $1 AND id != $2 AND status = 'PENDING'`,
         [application.job_id, applicationId],
       );
     });
+
+    // Notify accepted applicant
+    await this.notificationsService.createNotification(
+      application.applicant_id,
+      'APPLICATION_ACCEPTED',
+      'Application Accepted! 🎉',
+      `Congratulations! Your application for "${application.job_title}" has been accepted.`,
+      '/applications',
+    );
 
     this.logger.log(`Application ${applicationId} accepted for job ${application.job_id}`);
     return { message: 'Application accepted. Job is now in progress.' };
@@ -236,8 +233,9 @@ export class ApplicationsService {
   async rejectApplication(userId: string, applicationId: string) {
     const application = await this.db.queryOne<ApplicationRow & {
       posted_by_id: string;
+      job_title: string;
     }>(
-      `SELECT a.*, j.posted_by_id
+      `SELECT a.*, j.posted_by_id, j.title AS job_title
        FROM applications a
        JOIN jobs j ON j.id = a.job_id
        WHERE a.id = $1`,
@@ -245,19 +243,21 @@ export class ApplicationsService {
     );
 
     if (!application) throw new NotFoundException('Application not found');
-
-    if (application.posted_by_id !== userId) {
-      throw new ForbiddenException('You can only manage applications for your own jobs');
-    }
-
-    if (application.status !== 'PENDING') {
-      throw new BadRequestException('Only pending applications can be rejected');
-    }
+    if (application.posted_by_id !== userId) throw new ForbiddenException('You can only manage applications for your own jobs');
+    if (application.status !== 'PENDING') throw new BadRequestException('Only pending applications can be rejected');
 
     await this.db.query(
-      `UPDATE applications SET status = 'REJECTED', updated_at = NOW()
-       WHERE id = $1`,
+      `UPDATE applications SET status = 'REJECTED', updated_at = NOW() WHERE id = $1`,
       [applicationId],
+    );
+
+    // Notify rejected applicant
+    await this.notificationsService.createNotification(
+      application.applicant_id,
+      'APPLICATION_REJECTED',
+      'Application Update',
+      `Your application for "${application.job_title}" was not selected this time.`,
+      '/applications',
     );
 
     return { message: 'Application rejected' };
@@ -272,18 +272,11 @@ export class ApplicationsService {
     );
 
     if (!application) throw new NotFoundException('Application not found');
-
-    if (application.applicant_id !== userId) {
-      throw new ForbiddenException('You can only withdraw your own applications');
-    }
-
-    if (application.status !== 'PENDING') {
-      throw new BadRequestException('Only pending applications can be withdrawn');
-    }
+    if (application.applicant_id !== userId) throw new ForbiddenException('You can only withdraw your own applications');
+    if (application.status !== 'PENDING') throw new BadRequestException('Only pending applications can be withdrawn');
 
     await this.db.query(
-      `UPDATE applications SET status = 'WITHDRAWN', updated_at = NOW()
-       WHERE id = $1`,
+      `UPDATE applications SET status = 'WITHDRAWN', updated_at = NOW() WHERE id = $1`,
       [applicationId],
     );
 

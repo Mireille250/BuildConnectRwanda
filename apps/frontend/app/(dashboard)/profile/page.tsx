@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -44,7 +44,6 @@ interface ProfileData {
   phone: string | null;
   district: string | null;
   isVerified: boolean;
-  createdAt: string;
   profile: {
     profession: string | null;
     skills: string[];
@@ -69,46 +68,29 @@ export default function ProfilePage() {
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [activeTab, setActiveTab] = useState<'info' | 'professional' | 'security'>('info');
   const [skillInput, setSkillInput] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  // Form state
   const [form, setForm] = useState({
-    firstName: '',
-    lastName: '',
-    phone: '',
-    district: '',
-    bio: '',
-    profession: '',
-    skills: [] as string[],
-    experience: '',
-    availability: true,
-    portfolioUrl: '',
-    linkedinUrl: '',
-    licenseNumber: '',
-    institution: '',
-    graduationYear: '',
-    companyName: '',
-    registrationNo: '',
-    website: '',
+    firstName: '', lastName: '', phone: '', district: '', bio: '',
+    profession: '', skills: [] as string[], experience: '',
+    availability: true, portfolioUrl: '', linkedinUrl: '',
+    licenseNumber: '', institution: '', graduationYear: '',
+    companyName: '', registrationNo: '', website: '',
   });
 
-  // Password form
   const [passwordForm, setPasswordForm] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
+    currentPassword: '', newPassword: '', confirmPassword: '',
   });
 
-  useEffect(() => {
-    fetchProfile();
-  }, []);
+  useEffect(() => { fetchProfile(); }, []);
 
   async function fetchProfile() {
     try {
       const { data } = await api.get('/users/me/profile');
       setProfileData(data);
-      // Populate form
       setForm({
         firstName: data.firstName ?? '',
         lastName: data.lastName ?? '',
@@ -128,10 +110,35 @@ export default function ProfilePage() {
         registrationNo: data.profile?.registrationNo ?? '',
         website: data.profile?.website ?? '',
       });
-    } catch {
-      toast.error('Failed to load profile');
+    } catch { toast.error('Failed to load profile'); }
+    finally { setLoading(false); }
+  }
+
+  async function handlePhotoUpload(ev: React.ChangeEvent<HTMLInputElement>) {
+    const file = ev.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Photo must be less than 5MB');
+      return;
+    }
+
+    setUploadingPhoto(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const { data } = await api.post('/users/me/photo', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      setProfileData((prev) => prev ? { ...prev, profilePhoto: data.profilePhoto } : null);
+      updateUser({ profilePhoto: data.profilePhoto });
+      toast.success('Profile photo updated!');
+    } catch (error: any) {
+      toast.error(error.response?.data?.message ?? 'Failed to upload photo');
     } finally {
-      setLoading(false);
+      setUploadingPhoto(false);
     }
   }
 
@@ -190,13 +197,17 @@ export default function ProfilePage() {
       toast.error('New passwords do not match');
       return;
     }
+    if (passwordForm.newPassword.length < 8) {
+      toast.error('Password must be at least 8 characters');
+      return;
+    }
     setSaving(true);
     try {
       await api.patch('/users/me/password', {
         currentPassword: passwordForm.currentPassword,
         newPassword: passwordForm.newPassword,
       });
-      toast.success('Password changed. Please login again.');
+      toast.success('Password changed successfully!');
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (error: any) {
       toast.error(error.response?.data?.message ?? 'Failed to change password');
@@ -205,58 +216,103 @@ export default function ProfilePage() {
     }
   }
 
-  if (loading) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <p className="text-gray-400">Loading profile...</p>
-    </div>
-  );
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-blue-900/30 border-t-blue-900 rounded-full animate-spin" />
+      </div>
+    );
+  }
 
-  const isEngineer = ['ENGINEER'].includes(user?.role ?? '');
+  const isEngineer = user?.role === 'ENGINEER';
   const isCompany = ['COMPANY', 'SUPPLIER'].includes(user?.role ?? '');
   const isWorker = user?.role === 'WORKER';
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-3xl mx-auto">
-
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-6">
-          <Button variant="outline" onClick={() => router.push('/')}>← Home</Button>
-          <h1 className="text-2xl font-bold text-gray-900">My Profile</h1>
+    <div className="min-h-screen bg-gray-50">
+      {/* Navbar */}
+      <nav className="bg-white border-b sticky top-0 z-50">
+        <div className="max-w-4xl mx-auto px-4 md:px-6 py-4 flex items-center justify-between">
+          <a href="/" className="flex items-center gap-2">
+            <div className="w-9 h-9 bg-blue-900 rounded-lg flex items-center justify-center text-white font-bold">B</div>
+            <span className="font-bold text-gray-900 hidden sm:block">BuildConnect <span className="text-amber-500">Rwanda</span></span>
+          </a>
+          <Button variant="outline" size="sm" className="rounded-lg" onClick={() => router.push('/dashboard')}>
+            ← Dashboard
+          </Button>
         </div>
+      </nav>
 
-        {/* Profile Summary Card */}
-        <Card className="mb-6">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center text-2xl font-bold text-orange-600">
-                {profileData?.firstName?.[0]}{profileData?.lastName?.[0]}
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-bold text-gray-900">
-                    {profileData?.firstName} {profileData?.lastName}
-                  </h2>
-                  {profileData?.isVerified && (
-                    <Badge className="bg-blue-100 text-blue-700 text-xs">✓ Verified</Badge>
-                  )}
+      <div className="max-w-3xl mx-auto px-4 md:px-6 py-8">
+        {/* Profile Photo Card */}
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
+          <div className="flex items-center gap-5">
+            {/* Avatar */}
+            <div className="relative">
+              {profileData?.profilePhoto ? (
+                <img
+                  src={profileData.profilePhoto}
+                  alt="Profile"
+                  className="w-20 h-20 rounded-2xl object-cover"
+                />
+              ) : (
+                <div className="w-20 h-20 rounded-2xl bg-blue-900 flex items-center justify-center text-3xl font-bold text-white">
+                  {profileData?.firstName?.[0]}{profileData?.lastName?.[0]}
                 </div>
-                <p className="text-gray-500 text-sm">{profileData?.role} · {profileData?.district ?? 'Rwanda'}</p>
-                {profileData?.profile?.rating !== null && (
-                  <p className="text-sm text-orange-600 mt-0.5">
-                    ⭐ {Number(profileData?.profile?.rating).toFixed(1)} ({profileData?.profile?.ratingCount} reviews)
-                  </p>
+              )}
+              {/* Upload overlay */}
+              <button
+                onClick={() => fileRef.current?.click()}
+                disabled={uploadingPhoto}
+                className="absolute inset-0 rounded-2xl bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center"
+              >
+                {uploadingPhoto ? (
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <span className="text-white text-lg">📷</span>
+                )}
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handlePhotoUpload}
+              />
+            </div>
+
+            <div className="flex-1">
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <h2 className="text-xl font-bold text-gray-900">
+                  {profileData?.firstName} {profileData?.lastName}
+                </h2>
+                {profileData?.isVerified && (
+                  <Badge className="bg-blue-100 text-blue-700 text-xs">✓ Verified</Badge>
                 )}
               </div>
-              <Badge className="bg-gray-100 text-gray-600">
-                {profileData?.profile?.availability ? '🟢 Available' : '🔴 Unavailable'}
-              </Badge>
+              <p className="text-gray-500 text-sm">{profileData?.role} · {profileData?.district ?? 'Rwanda'}</p>
+              {profileData?.profile?.rating !== null && profileData?.profile?.ratingCount ? (
+                <p className="text-amber-500 text-sm mt-1">
+                  ⭐ {Number(profileData?.profile?.rating).toFixed(1)} ({profileData?.profile?.ratingCount} reviews)
+                </p>
+              ) : null}
+              <button
+                onClick={() => fileRef.current?.click()}
+                disabled={uploadingPhoto}
+                className="mt-2 text-xs text-blue-600 hover:underline font-medium"
+              >
+                {uploadingPhoto ? 'Uploading...' : '📷 Change profile photo'}
+              </button>
             </div>
-          </CardContent>
-        </Card>
+
+            <Badge className={profileData?.profile?.availability ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}>
+              {profileData?.profile?.availability ? '🟢 Available' : '🔴 Unavailable'}
+            </Badge>
+          </div>
+        </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-6">
+        <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-6">
           {[
             { key: 'info', label: 'Personal Info' },
             { key: 'professional', label: 'Professional' },
@@ -265,7 +321,7 @@ export default function ProfilePage() {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key as typeof activeTab)}
-              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+              className={`flex-1 py-2 px-4 rounded-lg text-sm font-semibold transition-colors ${
                 activeTab === tab.key
                   ? 'bg-white text-gray-900 shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
@@ -278,68 +334,68 @@ export default function ProfilePage() {
 
         {/* Personal Info Tab */}
         {activeTab === 'info' && (
-          <Card>
+          <Card className="border-gray-100 shadow-sm">
             <CardHeader>
-              <CardTitle>Personal Information</CardTitle>
+              <CardTitle className="text-lg">Personal Information</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">First Name</label>
-                  <Input value={form.firstName} onChange={(e) => setField('firstName', e.target.value)} />
+                  <label className="text-sm font-semibold text-gray-700">First Name</label>
+                  <Input value={form.firstName} onChange={(e) => setField('firstName', e.target.value)} className="rounded-xl border-gray-200" />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Last Name</label>
-                  <Input value={form.lastName} onChange={(e) => setField('lastName', e.target.value)} />
+                  <label className="text-sm font-semibold text-gray-700">Last Name</label>
+                  <Input value={form.lastName} onChange={(e) => setField('lastName', e.target.value)} className="rounded-xl border-gray-200" />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Email</label>
-                <Input value={profileData?.email ?? ''} disabled className="bg-gray-50 text-gray-500" />
+                <label className="text-sm font-semibold text-gray-700">Email</label>
+                <Input value={profileData?.email ?? ''} disabled className="bg-gray-50 text-gray-400 rounded-xl border-gray-200" />
                 <p className="text-xs text-gray-400">Email cannot be changed</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Phone</label>
-                  <Input
-                    placeholder="+250 7XX XXX XXX"
-                    value={form.phone}
-                    onChange={(e) => setField('phone', e.target.value)}
-                  />
+                  <label className="text-sm font-semibold text-gray-700">Phone</label>
+                  <Input placeholder="+250 7XX XXX XXX" value={form.phone} onChange={(e) => setField('phone', e.target.value)} className="rounded-xl border-gray-200" />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">District</label>
+                  <label className="text-sm font-semibold text-gray-700">District</label>
                   <select
-                    className="w-full border rounded-md px-3 py-2 text-sm bg-white"
+                    className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm bg-white outline-none focus:border-blue-500"
                     value={form.district}
                     onChange={(e) => setField('district', e.target.value)}
                   >
                     <option value="">Select district</option>
-                    {DISTRICTS.map((d) => (
-                      <option key={d} value={d}>{d}</option>
-                    ))}
+                    {DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
                   </select>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Bio</label>
+                <label className="text-sm font-semibold text-gray-700">Bio</label>
                 <Textarea
-                  placeholder="Tell clients about yourself, your experience and what you do..."
+                  placeholder="Tell clients about yourself..."
                   rows={4}
                   value={form.bio}
                   onChange={(e) => setField('bio', e.target.value)}
+                  className="rounded-xl border-gray-200 resize-none"
                 />
               </div>
 
               <Button
-                className="w-full bg-orange-600 hover:bg-orange-700 text-white"
+                className="w-full bg-blue-900 hover:bg-blue-800 text-white rounded-xl font-semibold"
                 onClick={handleSaveProfile}
                 disabled={saving}
               >
-                {saving ? 'Saving...' : 'Save Changes'}
+                {saving ? (
+                  <span className="flex items-center gap-2 justify-center">
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Saving...
+                  </span>
+                ) : 'Save Changes'}
               </Button>
             </CardContent>
           </Card>
@@ -347,27 +403,25 @@ export default function ProfilePage() {
 
         {/* Professional Tab */}
         {activeTab === 'professional' && (
-          <Card>
+          <Card className="border-gray-100 shadow-sm">
             <CardHeader>
-              <CardTitle>Professional Details</CardTitle>
+              <CardTitle className="text-lg">Professional Details</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-5">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Profession</label>
+                  <label className="text-sm font-semibold text-gray-700">Profession</label>
                   <select
-                    className="w-full border rounded-md px-3 py-2 text-sm bg-white"
+                    className="w-full h-10 border border-gray-200 rounded-xl px-3 text-sm bg-white outline-none focus:border-blue-500"
                     value={form.profession}
                     onChange={(e) => setField('profession', e.target.value)}
                   >
                     <option value="">Select profession</option>
-                    {PROFESSIONS.map((p) => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
+                    {PROFESSIONS.map((p) => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Years of Experience</label>
+                  <label className="text-sm font-semibold text-gray-700">Years of Experience</label>
                   <Input
                     type="number"
                     min="0"
@@ -375,32 +429,26 @@ export default function ProfilePage() {
                     placeholder="e.g. 5"
                     value={form.experience}
                     onChange={(e) => setField('experience', e.target.value)}
+                    className="rounded-xl border-gray-200"
                   />
                 </div>
               </div>
 
+              {/* Availability */}
               <div className="space-y-2">
-                <label className="text-sm font-medium">Availability</label>
+                <label className="text-sm font-semibold text-gray-700">Availability</label>
                 <div className="flex gap-3">
                   <button
                     type="button"
                     onClick={() => setField('availability', true)}
-                    className={`flex-1 py-2 px-4 rounded-md border text-sm font-medium transition-colors ${
-                      form.availability
-                        ? 'bg-green-50 border-green-300 text-green-700'
-                        : 'bg-white text-gray-500'
-                    }`}
+                    className={`flex-1 py-2.5 px-4 rounded-xl border-2 text-sm font-semibold transition-colors ${form.availability ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 text-gray-500 bg-white'}`}
                   >
                     🟢 Available for work
                   </button>
                   <button
                     type="button"
                     onClick={() => setField('availability', false)}
-                    className={`flex-1 py-2 px-4 rounded-md border text-sm font-medium transition-colors ${
-                      !form.availability
-                        ? 'bg-red-50 border-red-300 text-red-700'
-                        : 'bg-white text-gray-500'
-                    }`}
+                    className={`flex-1 py-2.5 px-4 rounded-xl border-2 text-sm font-semibold transition-colors ${!form.availability ? 'border-red-400 bg-red-50 text-red-700' : 'border-gray-200 text-gray-500 bg-white'}`}
                   >
                     🔴 Not available
                   </button>
@@ -409,153 +457,109 @@ export default function ProfilePage() {
 
               {/* Skills */}
               <div className="space-y-2">
-                <label className="text-sm font-medium">Skills</label>
+                <label className="text-sm font-semibold text-gray-700">Skills</label>
                 <div className="flex gap-2">
                   <Input
-                    placeholder="Type a skill or select below"
+                    placeholder="Add a skill..."
                     value={skillInput}
                     onChange={(e) => setSkillInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addSkill(skillInput))}
+                    className="rounded-xl border-gray-200"
                   />
-                  <Button type="button" variant="outline" onClick={() => addSkill(skillInput)}>
-                    Add
-                  </Button>
+                  <Button type="button" variant="outline" onClick={() => addSkill(skillInput)} className="rounded-xl">Add</Button>
                 </div>
-                {/* Quick add from list */}
-                <div className="flex flex-wrap gap-1 mt-1">
+                {/* Quick add */}
+                <div className="flex flex-wrap gap-1.5">
                   {SKILLS_LIST.filter((s) => !form.skills.includes(s)).slice(0, 8).map((skill) => (
                     <button
                       key={skill}
                       type="button"
                       onClick={() => addSkill(skill)}
-                      className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                      className="text-xs bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full hover:bg-blue-50 hover:text-blue-700 transition-colors"
                     >
                       + {skill}
                     </button>
                   ))}
                 </div>
-                {/* Selected skills */}
+                {/* Selected */}
                 {form.skills.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2 p-3 bg-gray-50 rounded-lg">
+                  <div className="flex flex-wrap gap-2 p-3 bg-gray-50 rounded-xl">
                     {form.skills.map((skill) => (
-                      <span
-                        key={skill}
-                        className="text-sm bg-orange-50 text-orange-600 px-3 py-1 rounded-full flex items-center gap-1"
-                      >
+                      <span key={skill} className="flex items-center gap-1 text-sm bg-blue-900 text-white px-3 py-1 rounded-full">
                         {skill}
-                        <button
-                          type="button"
-                          onClick={() => removeSkill(skill)}
-                          className="hover:text-red-500 font-bold"
-                        >
-                          ×
-                        </button>
+                        <button type="button" onClick={() => removeSkill(skill)} className="hover:text-red-300 ml-0.5 font-bold">×</button>
                       </span>
                     ))}
                   </div>
                 )}
               </div>
 
-              {/* Engineer-specific fields */}
+              {/* Engineer credentials */}
               {(isEngineer || isWorker) && (
-                <>
-                  <div className="border-t pt-4">
-                    <p className="text-sm font-semibold text-gray-700 mb-3">Credentials</p>
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">License / Certificate Number</label>
-                        <Input
-                          placeholder="e.g. ENG-2019-00234"
-                          value={form.licenseNumber}
-                          onChange={(e) => setField('licenseNumber', e.target.value)}
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Institution</label>
-                          <Input
-                            placeholder="e.g. University of Rwanda"
-                            value={form.institution}
-                            onChange={(e) => setField('institution', e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Graduation Year</label>
-                          <Input
-                            type="number"
-                            placeholder="e.g. 2018"
-                            value={form.graduationYear}
-                            onChange={(e) => setField('graduationYear', e.target.value)}
-                          />
-                        </div>
-                      </div>
+                <div className="border-t border-gray-100 pt-4 space-y-4">
+                  <p className="text-sm font-bold text-gray-700">Credentials</p>
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-gray-700">License / Certificate Number</label>
+                    <Input placeholder="e.g. ENG-2019-00234" value={form.licenseNumber} onChange={(e) => setField('licenseNumber', e.target.value)} className="rounded-xl border-gray-200" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-gray-700">Institution</label>
+                      <Input placeholder="e.g. University of Rwanda" value={form.institution} onChange={(e) => setField('institution', e.target.value)} className="rounded-xl border-gray-200" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-gray-700">Graduation Year</label>
+                      <Input type="number" placeholder="e.g. 2018" value={form.graduationYear} onChange={(e) => setField('graduationYear', e.target.value)} className="rounded-xl border-gray-200" />
                     </div>
                   </div>
-                </>
+                </div>
               )}
 
-              {/* Company-specific fields */}
+              {/* Company fields */}
               {isCompany && (
-                <div className="border-t pt-4">
-                  <p className="text-sm font-semibold text-gray-700 mb-3">Company Details</p>
-                  <div className="space-y-4">
+                <div className="border-t border-gray-100 pt-4 space-y-4">
+                  <p className="text-sm font-bold text-gray-700">Company Details</p>
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-gray-700">Company Name</label>
+                    <Input placeholder="e.g. Kigali Construction Ltd" value={form.companyName} onChange={(e) => setField('companyName', e.target.value)} className="rounded-xl border-gray-200" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Company Name</label>
-                      <Input
-                        placeholder="e.g. Kigali Construction Ltd"
-                        value={form.companyName}
-                        onChange={(e) => setField('companyName', e.target.value)}
-                      />
+                      <label className="text-sm font-semibold text-gray-700">Registration No.</label>
+                      <Input placeholder="e.g. RDB-2020-12345" value={form.registrationNo} onChange={(e) => setField('registrationNo', e.target.value)} className="rounded-xl border-gray-200" />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Registration Number</label>
-                        <Input
-                          placeholder="e.g. RDB-2020-12345"
-                          value={form.registrationNo}
-                          onChange={(e) => setField('registrationNo', e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Website</label>
-                        <Input
-                          placeholder="https://yourcompany.rw"
-                          value={form.website}
-                          onChange={(e) => setField('website', e.target.value)}
-                        />
-                      </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-gray-700">Website</label>
+                      <Input placeholder="https://yourcompany.rw" value={form.website} onChange={(e) => setField('website', e.target.value)} className="rounded-xl border-gray-200" />
                     </div>
                   </div>
                 </div>
               )}
 
               {/* Links */}
-              <div className="border-t pt-4 space-y-4">
-                <p className="text-sm font-semibold text-gray-700">Links</p>
+              <div className="border-t border-gray-100 pt-4 space-y-4">
+                <p className="text-sm font-bold text-gray-700">Links</p>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Portfolio URL</label>
-                  <Input
-                    placeholder="https://yourportfolio.com"
-                    value={form.portfolioUrl}
-                    onChange={(e) => setField('portfolioUrl', e.target.value)}
-                  />
+                  <label className="text-sm font-semibold text-gray-700">Portfolio URL</label>
+                  <Input placeholder="https://yourportfolio.com" value={form.portfolioUrl} onChange={(e) => setField('portfolioUrl', e.target.value)} className="rounded-xl border-gray-200" />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">LinkedIn URL</label>
-                  <Input
-                    placeholder="https://linkedin.com/in/yourname"
-                    value={form.linkedinUrl}
-                    onChange={(e) => setField('linkedinUrl', e.target.value)}
-                  />
+                  <label className="text-sm font-semibold text-gray-700">LinkedIn URL</label>
+                  <Input placeholder="https://linkedin.com/in/yourname" value={form.linkedinUrl} onChange={(e) => setField('linkedinUrl', e.target.value)} className="rounded-xl border-gray-200" />
                 </div>
               </div>
 
               <Button
-                className="w-full bg-orange-600 hover:bg-orange-700 text-white"
+                className="w-full bg-blue-900 hover:bg-blue-800 text-white rounded-xl font-semibold"
                 onClick={handleSaveProfile}
                 disabled={saving}
               >
-                {saving ? 'Saving...' : 'Save Professional Details'}
+                {saving ? (
+                  <span className="flex items-center gap-2 justify-center">
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Saving...
+                  </span>
+                ) : 'Save Professional Details'}
               </Button>
             </CardContent>
           </Card>
@@ -563,43 +567,44 @@ export default function ProfilePage() {
 
         {/* Security Tab */}
         {activeTab === 'security' && (
-          <Card>
+          <Card className="border-gray-100 shadow-sm">
             <CardHeader>
-              <CardTitle>Change Password</CardTitle>
+              <CardTitle className="text-lg">Change Password</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Current Password</label>
+                <label className="text-sm font-semibold text-gray-700">Current Password</label>
                 <Input
                   type="password"
                   placeholder="••••••••"
                   value={passwordForm.currentPassword}
                   onChange={(e) => setPasswordForm((p) => ({ ...p, currentPassword: e.target.value }))}
+                  className="rounded-xl border-gray-200"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">New Password</label>
+                <label className="text-sm font-semibold text-gray-700">New Password</label>
                 <Input
                   type="password"
                   placeholder="••••••••"
                   value={passwordForm.newPassword}
                   onChange={(e) => setPasswordForm((p) => ({ ...p, newPassword: e.target.value }))}
+                  className="rounded-xl border-gray-200"
                 />
-                <p className="text-xs text-gray-400">
-                  Must be 8+ characters with uppercase, lowercase and a number
-                </p>
+                <p className="text-xs text-gray-400">Min 8 characters with uppercase, lowercase and number</p>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Confirm New Password</label>
+                <label className="text-sm font-semibold text-gray-700">Confirm New Password</label>
                 <Input
                   type="password"
                   placeholder="••••••••"
                   value={passwordForm.confirmPassword}
                   onChange={(e) => setPasswordForm((p) => ({ ...p, confirmPassword: e.target.value }))}
+                  className="rounded-xl border-gray-200"
                 />
               </div>
               <Button
-                className="w-full bg-orange-600 hover:bg-orange-700 text-white"
+                className="w-full bg-blue-900 hover:bg-blue-800 text-white rounded-xl font-semibold"
                 onClick={handleChangePassword}
                 disabled={saving}
               >
