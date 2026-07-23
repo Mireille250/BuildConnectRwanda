@@ -121,7 +121,7 @@ export default function LoginPage() {
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-sm font-medium text-gray-700">Password</label>
-                <button type="button" className="text-sm text-blue-600 hover:underline">Forgot?</button>
+                <Link href="/forgot-password" className="text-sm text-blue-600 hover:underline">Forgot?</Link>
               </div>
               <div className="flex items-center border border-gray-200 rounded-xl px-4 py-3 gap-3 focus-within:border-blue-500 transition-colors">
                 <span className="text-gray-400 text-sm">🔒</span>

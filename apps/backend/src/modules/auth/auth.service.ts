@@ -3,6 +3,7 @@ import {
   ConflictException,
   UnauthorizedException,
   Logger,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -10,6 +11,7 @@ import * as bcrypt from 'bcrypt';
 import { DatabaseService } from '../../database/database.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { EmailService } from '../../common/email/email.service';
 
 interface UserRow {
   id: string;
@@ -31,6 +33,7 @@ export class AuthService {
     private readonly db: DatabaseService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly emailService: EmailService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -197,4 +200,60 @@ export class AuthService {
       profilePhoto: user.profile_photo ?? null,
     };
   }
+  async forgotPassword(email: string) {
+  const user = await this.db.queryOne<{
+    id: string;
+    first_name: string;
+    email: string;
+  }>(
+    'SELECT id, first_name, email FROM users WHERE email = $1',
+    [email],
+  );
+
+  // Always return success to prevent email enumeration
+  if (!user) return { message: 'If that email exists, a reset link has been sent.' };
+
+  // Generate secure token
+  const crypto = await import('crypto');
+  const token = crypto.randomBytes(32).toString('hex');
+  const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+  await this.db.query(
+    'UPDATE users SET reset_token = $1, reset_token_expires = $2 WHERE id = $3',
+    [token, expires, user.id],
+  );
+
+  const resetUrl = `${this.config.get('FRONTEND_URL')}/reset-password?token=${token}`;
+
+  await this.emailService.sendPasswordReset(user.email, user.first_name, resetUrl);
+
+  return { message: 'If that email exists, a reset link has been sent.' };
+}
+
+async resetPassword(token: string, newPassword: string) {
+  const user = await this.db.queryOne<{
+    id: string;
+    reset_token_expires: Date;
+  }>(
+    `SELECT id, reset_token_expires FROM users
+     WHERE reset_token = $1 AND reset_token_expires > NOW()`,
+    [token],
+  );
+
+  if (!user) {
+    throw new BadRequestException('Invalid or expired reset token');
+  }
+
+  const bcrypt = await import('bcrypt');
+  const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+  await this.db.query(
+    `UPDATE users
+     SET password_hash = $1, reset_token = NULL, reset_token_expires = NULL, updated_at = NOW()
+     WHERE id = $2`,
+    [hashedPassword, user.id],
+  );
+
+  return { message: 'Password reset successfully. You can now log in.' };
+}
 }
